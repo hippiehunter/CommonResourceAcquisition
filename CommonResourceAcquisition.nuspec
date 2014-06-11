@@ -6,7 +6,7 @@
     <title>CommonResourceAcquisition</title>
     <authors>HippieHunter</authors>
     <owners>HippieHunter</owners>
-    <projectUrl>http://www.github.com/HippieHunter/CommonResourceAcquisition<projectUrl>
+    <projectUrl>http://www.github.com/HippieHunter/CommonResourceAcquisition</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Allows easy access to the raw resource urls involved in common video and image hosts</description>
     <tags>Imgur youtube liveleak</tags>
