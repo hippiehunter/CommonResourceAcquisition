@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommonResourceAcquisition.ImageAcquisition;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,33 +16,37 @@ namespace CommonResourceAcquisition.VideoAcquisition
             var isYoutube = YouTube.IsAPI(originalUrl);
 			if (!isYoutube)
 			{
-				var uri = new Uri(originalUrl);
-                var targetHost = uri.DnsSafeHost.ToLower();
-				return targetHost == "liveleak.com" ||
-					targetHost == "www.liveleak.com";
+				switch (HttpClientUtility.GetDomainFromUrl(originalUrl).ToLower())
+				{
+					case "gfycat.com":
+						return !string.IsNullOrWhiteSpace(Gfycat.GetGfyName(originalUrl));
+					case "liveleak.com":
+					case "vimeo.com":
+						return true;
+					default:
+						return false;
+				}
 			}
 			else
 				return true;
         }
 
-        public static Task<VideoResult> GetPlayableStreams(string originalUrl, Func<string, Task<string>> getter)
+        public static IVideoResult GetVideo(string originalUrl)
         {
 			if (YouTube.IsAPI(originalUrl))
-				return YouTube.GetPlayableStreams(originalUrl, getter);
+				return YouTube.GetVideoResult(originalUrl);
 			else
 			{
-				var uri = new Uri(originalUrl);
-				var targetHost = uri.DnsSafeHost.ToLower();
-
-				var isLiveLeak = targetHost == "liveleak.com" ||
-					targetHost == "www.liveleak.com";
-
-				if (isLiveLeak)
+				switch (HttpClientUtility.GetDomainFromUrl(originalUrl).ToLower())
 				{
-					return Liveleak.GetPlayableStreams(originalUrl, getter);
+					case "liveleak.com":
+						return Liveleak.GetVideoResult(originalUrl);
+					case "gfycat.com":
+						return Gfycat.GetVideoResult(originalUrl);
+					case "vimeo.com":
+						return Vimeo.GetVideoResult(originalUrl);
 				}
 			}
-
 			return null;
         }
     }

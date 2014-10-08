@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.VideoAcquisition
 {
-    public class VideoResult
+    public interface IVideoResult
     {
-        public string PreviewUrl { get; set; }
-        public IEnumerable<Tuple<string, string>> PlayableStreams { get; set; }
+        Task<string> PreviewUrl(CancellationToken cancelToken);
+		Task<IEnumerable<Tuple<string, string>>> PlayableStreams(CancellationToken cancelToken);
     }
 }

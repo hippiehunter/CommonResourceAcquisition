@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommonResourceAcquisition.ImageAcquisition;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,31 +9,66 @@ namespace CommonResourceAcquisition.VideoAcquisition
 {
 	public class Liveleak
 	{
-		public static async Task<VideoResult> GetPlayableStreams(string originalUrl, Func<string, Task<string>> getter)
+		public static IVideoResult GetVideoResult(string originalUrl)
 		{
-			string pageContents = null;
-			if (originalUrl.Contains("&ajax=1"))
-				pageContents = await getter(originalUrl);
-			else
-				pageContents = await getter(originalUrl + "&ajax=1");
+			return new VideoResult(originalUrl);
+		}
 
-			if (pageContents != null)
+		internal class VideoResult : IVideoResult
+		{
+			Lazy<Task<string>> _pageContents;
+			public VideoResult(string originalUrl)
 			{
-				var targetString = "file: \"http://edge.liveleak.com";
-				var targetStringStart = pageContents.IndexOf(targetString);
-				if (targetStringStart != -1)
+				_pageContents = new Lazy<Task<string>>(() =>
 				{
-					var endofTargetString = pageContents.IndexOf("\",", targetStringStart);
-					if (endofTargetString != -1)
+					if (originalUrl.Contains("&ajax=1"))
+						return HttpClientUtility.Get(originalUrl);
+					else
+						return HttpClientUtility.Get(originalUrl + "&ajax=1");
+				});
+			}
+			public async Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+			{
+				
+				var pageContents = await _pageContents.Value;
+				if (pageContents != null)
+				{
+					var targetString = "image: \"http://edge.liveleak.com";
+					var targetStringStart = pageContents.IndexOf(targetString);
+					if (targetStringStart != -1)
 					{
-						targetStringStart += "file: \"".Length;
-						var fileUrl = pageContents.Substring(targetStringStart, endofTargetString - targetStringStart);
-						return new VideoResult { PlayableStreams = new List<Tuple<string, string>> { Tuple.Create(fileUrl, "mp4") }, PreviewUrl = "" };
+						var endofTargetString = pageContents.IndexOf("\",", targetStringStart);
+						if (endofTargetString != -1)
+						{
+							targetStringStart += "image: \"".Length;
+							var fileUrl = pageContents.Substring(targetStringStart, endofTargetString - targetStringStart);
+							return fileUrl;
+						}
 					}
 				}
+				return null;
 			}
-			
-			return null;
+
+			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			{
+				var pageContents = await _pageContents.Value;
+				if (pageContents != null)
+				{
+					var targetString = "file: \"http://edge.liveleak.com";
+					var targetStringStart = pageContents.IndexOf(targetString);
+					if (targetStringStart != -1)
+					{
+						var endofTargetString = pageContents.IndexOf("\",", targetStringStart);
+						if (endofTargetString != -1)
+						{
+							targetStringStart += "file: \"".Length;
+							var fileUrl = pageContents.Substring(targetStringStart, endofTargetString - targetStringStart);
+							return new List<Tuple<string, string>> { Tuple.Create(fileUrl, "mp4") };
+						}
+					}
+				}
+				return Enumerable.Empty<Tuple<string, string>>();
+			}
 		}
 	}
 }

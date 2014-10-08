@@ -65,9 +65,11 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Picshd.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Quickmeme.cs" />
+    <Compile Include="VideoAcquisition\Gfycat.cs" />
     <Compile Include="VideoAcquisition\Liveleak.cs" />
     <Compile Include="VideoAcquisition\VideoAcquisition.cs" />
     <Compile Include="VideoAcquisition\VideoResult.cs" />
+    <Compile Include="VideoAcquisition\Vimeo.cs" />
     <Compile Include="VideoAcquisition\YouTube.cs" />
   </ItemGroup>
   <ItemGroup>
