@@ -33,7 +33,21 @@ namespace CommonResourceAcquisition.VideoAcquisition
 
         public static IVideoResult GetVideo(string originalUrl)
         {
-			if (YouTube.IsAPI(originalUrl))
+			string targetHost = null;
+			string fileName = null;
+
+			if (Uri.IsWellFormedUriString(originalUrl, UriKind.Absolute))
+			{
+				var uri = new Uri(originalUrl);
+				targetHost = uri.DnsSafeHost.ToLower();
+				fileName = uri.AbsolutePath;
+			}
+
+			if (fileName.EndsWith(".gifv"))
+				return new DummyVideoResult(originalUrl.Replace(".gifv", ".mp4"), originalUrl.Replace(".gifv", ".jpg"));
+			else if (fileName.EndsWith(".mp4") || fileName.EndsWith(".mpg"))
+				return new DummyVideoResult(originalUrl, null);
+			else if (YouTube.IsAPI(originalUrl))
 				return YouTube.GetVideoResult(originalUrl);
 			else
 			{
@@ -49,5 +63,25 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			}
 			return null;
         }
+
+		class DummyVideoResult : IVideoResult
+		{
+			string _videoUrl;
+			string _previewUrl;
+			public DummyVideoResult(string videoUrl, string previewUrl)
+			{
+				_videoUrl = videoUrl;
+				_previewUrl = previewUrl;
+			}
+			public Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+			{
+				return Task.FromResult(_previewUrl);
+			}
+
+			public Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			{
+				return Task.FromResult((IEnumerable<Tuple<string, string>>)new List<Tuple<string, string>> { new Tuple<string, string> ( _videoUrl, "mp4" )});
+			}
+		}
     }
 }
