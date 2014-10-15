@@ -29,6 +29,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 		}
 		private static async Task<string> HttpGet(string uri, string referer)
 		{
+			_client.DefaultRequestHeaders.Referrer = new Uri(referer);
 			var response = await _client.GetAsync(uri);
 			return await response.Content.ReadAsStringAsync();
 		}
@@ -87,7 +88,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 
 					if (!string.IsNullOrWhiteSpace(clipId))
 					{
-						var configResult = await HttpGet(string.Format("http://player.vimeo.com/video/{0}/config/", clipId), "http://www.google.com");
+						var configResult = await HttpGet(string.Format("http://player.vimeo.com/video/{0}/config", clipId), string.Format("http://vimeo.com/{0}", clipId));
 						return JsonConvert.DeserializeObject<RootVimeo>(configResult);
 					}
 					else
@@ -110,12 +111,14 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				var config = await _configRoot.Value;
 				if (config != null)
 				{
-					return new List<Tuple<string, string>> 
-					{ 
-						Tuple.Create(config.request.files.h264.mobile.url, config.request.files.h264.mobile.bitrate.ToString()),
-						Tuple.Create(config.request.files.h264.hd.url, config.request.files.h264.hd.bitrate.ToString()),
-						Tuple.Create(config.request.files.h264.sd.url, config.request.files.h264.sd.bitrate.ToString()),
-					};
+					var result = new List<Tuple<string, string>>();
+					if(config.request.files.h264.mobile != null)
+						result.Add(Tuple.Create(config.request.files.h264.mobile.url, config.request.files.h264.mobile.bitrate.ToString()));
+					if(config.request.files.h264.hd != null)
+						result.Add(Tuple.Create(config.request.files.h264.hd.url, config.request.files.h264.hd.bitrate.ToString()));
+					if (config.request.files.h264.sd != null)
+						result.Add(Tuple.Create(config.request.files.h264.sd.url, config.request.files.h264.sd.bitrate.ToString()));
+					return result;
 				}
 				else
 					return null;
@@ -291,37 +294,6 @@ namespace CommonResourceAcquisition.VideoAcquisition
 		public string rpc { get; set; }
 	}
 
-	public class Badge
-	{
-		public string name { get; set; }
-		public string img { get; set; }
-		public string svg { get; set; }
-		public int height { get; set; }
-		public int width { get; set; }
-		public string link { get; set; }
-		public string img_2x { get; set; }
-	}
-
-	public class Settings
-	{
-		public int fullscreen { get; set; }
-		public int byline { get; set; }
-		public int like { get; set; }
-		public int playbar { get; set; }
-		public int title { get; set; }
-		public int color { get; set; }
-		public int branding { get; set; }
-		public int share { get; set; }
-		public int scaling { get; set; }
-		public int logo { get; set; }
-		public int info_on_pause { get; set; }
-		public int watch_later { get; set; }
-		public int portrait { get; set; }
-		public int embed { get; set; }
-		public Badge badge { get; set; }
-		public int volume { get; set; }
-	}
-
 	public class Embed
 	{
 		public object player_id { get; set; }
@@ -330,7 +302,6 @@ namespace CommonResourceAcquisition.VideoAcquisition
 		public string context { get; set; }
 		public int time { get; set; }
 		public string color { get; set; }
-		public Settings settings { get; set; }
 		public int on_site { get; set; }
 		public int loop { get; set; }
 		public int autoplay { get; set; }
