@@ -187,25 +187,33 @@ namespace CommonResourceAcquisition.VideoAcquisition
         /// </summary>
         public static async Task<string> GetVideoTitleAsync(string youTubeId, CancellationToken token)
         {
-            using (var client = new HttpClient())
-            {
-                client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
-                var response = await client.GetAsync("http://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1", token);
-                var html = await response.Content.ReadAsStringAsync();
-                var startIndex = html.IndexOf(" title=\"");
-                if (startIndex != -1)
-                {
-                    startIndex = html.IndexOf(" title=\"", startIndex + 1);
-                    if (startIndex != -1)
-                    {
-                        startIndex += 8;
-                        var endIndex = html.IndexOf("\">", startIndex);
-                        if (endIndex != -1)
-                            return html.Substring(startIndex, endIndex - startIndex);
-                    }
-                }
-                return null;
-            }
+			using (var handler = new HttpClientHandler { })
+			{
+				if (handler.SupportsAutomaticDecompression)
+				{
+					handler.AutomaticDecompression = DecompressionMethods.GZip |
+													 DecompressionMethods.Deflate;
+				}
+				using (var client = new HttpClient(handler))
+				{
+					client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
+					var response = await client.GetAsync("http://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1", token);
+					var html = await response.Content.ReadAsStringAsync();
+					var startIndex = html.IndexOf(" title=\"");
+					if (startIndex != -1)
+					{
+						startIndex = html.IndexOf(" title=\"", startIndex + 1);
+						if (startIndex != -1)
+						{
+							startIndex += 8;
+							var endIndex = html.IndexOf("\">", startIndex);
+							if (endIndex != -1)
+								return html.Substring(startIndex, endIndex - startIndex);
+						}
+					}
+					return null;
+				}
+			}
         }
 
 		/// <summary>
@@ -451,11 +459,19 @@ namespace CommonResourceAcquisition.VideoAcquisition
 
 		private static async Task<string> HttpGet(string uri)
 		{
-			using (var client = new HttpClient())
+			using (var handler = new HttpClientHandler { })
 			{
-				client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
-				var response = await client.GetAsync(uri);
-				return await response.Content.ReadAsStringAsync();
+				if (handler.SupportsAutomaticDecompression)
+				{
+					handler.AutomaticDecompression = DecompressionMethods.GZip |
+													 DecompressionMethods.Deflate;
+				}
+				using (var client = new HttpClient(handler))
+				{
+					client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
+					var response = await client.GetAsync(uri);
+					return await response.Content.ReadAsStringAsync();
+				}
 			}
 		}
 

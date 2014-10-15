@@ -12,19 +12,25 @@ namespace CommonResourceAcquisition.VideoAcquisition
 {
 	class Vimeo
 	{
-
+		private static HttpClient _client;
+		static Vimeo()
+		{
+			var handler = new HttpClientHandler { CookieContainer = new CookieContainer() };
+			if (handler.SupportsAutomaticDecompression)
+			{
+				handler.AutomaticDecompression = DecompressionMethods.GZip |
+												 DecompressionMethods.Deflate;
+			}
+			_client = new HttpClient(handler);
+			_client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0");
+			_client.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+			_client.DefaultRequestHeaders.Add("Accept-Language", "ru,en;q=0.8,en-us;q=0.5,uk;q=0.3");
+			_client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
+		}
 		private static async Task<string> HttpGet(string uri, string referer)
 		{
-			using (var client = new HttpClient())
-			{
-				client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0");
-				client.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-				client.DefaultRequestHeaders.Add("Accept-Language", "ru,en;q=0.8,en-us;q=0.5,uk;q=0.3");
-				client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
-				client.DefaultRequestHeaders.Referrer = new Uri(referer);
-				var response = await client.GetAsync(uri);
-				return await response.Content.ReadAsStringAsync();
-			}
+			var response = await _client.GetAsync(uri);
+			return await response.Content.ReadAsStringAsync();
 		}
 		public static IVideoResult GetVideoResult(string originalUrl)
 		{
@@ -58,6 +64,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				public string embed_privacy { get; set; }
 			}
 
+			private Lazy<Task<RootVimeo>> _configRoot;
 			private Lazy<Task<string>> _initialPageData;
 			public VideoResult(string originalUrl)
 			{
@@ -65,52 +72,291 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				{
 					return HttpGet(originalUrl, "http://www.google.com");
 				});
+				_configRoot = new Lazy<Task<RootVimeo>>(async () =>
+				{
+					var pageData = await _initialPageData.Value;
+					string clipId = null;
+					if (Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Success)
+					{
+						clipId = Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+					}
+					else if (Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Success)
+					{
+						clipId = Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+					}
+
+					if (!string.IsNullOrWhiteSpace(clipId))
+					{
+						var configResult = await HttpGet(string.Format("http://player.vimeo.com/video/{0}/config/", clipId), "http://www.google.com");
+						return JsonConvert.DeserializeObject<RootVimeo>(configResult);
+					}
+					else
+						return null;
+				});
 			}
 			public async Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
 			{
-				var pageData = await _initialPageData.Value;
-				string clipId = null;
-				if (Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Success)
+				var config = await _configRoot.Value;
+				if (config != null)
 				{
-					clipId = Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+					return config.video.thumbs.medium;
 				}
-				else if (Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Success)
-				{
-					clipId = Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Groups[1].ToString();
-				}
-				var about = JsonConvert.DeserializeObject<AboutRequest>(await HttpGet(string.Format("http://vimeo.com/api/v2/video/{0}.json", clipId), "http://www.google.com"));
-				return about.thumbnail_large;
+				else
+					return null;
 			}
 
 			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
 			{
-				var pageData = await _initialPageData.Value;
-				string clipId = null;
-				if (Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Success)
+				var config = await _configRoot.Value;
+				if (config != null)
 				{
-					clipId = Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+					return new List<Tuple<string, string>> 
+					{ 
+						Tuple.Create(config.request.files.h264.mobile.url, config.request.files.h264.mobile.bitrate.ToString()),
+						Tuple.Create(config.request.files.h264.hd.url, config.request.files.h264.hd.bitrate.ToString()),
+						Tuple.Create(config.request.files.h264.sd.url, config.request.files.h264.sd.bitrate.ToString()),
+					};
 				}
-				else if (Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Success)
-				{
-					clipId = Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Groups[1].ToString();
-				}
-
-				string sig = Regex.Match(pageData, "\"signature\":\"(.+?)\"", RegexOptions.Singleline).Groups[1].ToString();
-				string timestamp = Regex.Match(pageData, "\"timestamp\":(\\d+)", RegexOptions.Singleline).Groups[1].ToString();
-
-				string videoUrl = string.Format("http://player.vimeo.com/play_redirect?clip_id={0}&sig={1}&time={2}&quality=hd&codecs=H264,VP8,VP6&type=moogaloop_local&embed_location=", clipId, sig, timestamp);
-
-				using (var client = new HttpClient())
-				{
-					client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0");
-					client.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-					client.DefaultRequestHeaders.Add("Accept-Language", "ru,en;q=0.8,en-us;q=0.5,uk;q=0.3");
-					client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
-					client.DefaultRequestHeaders.Referrer = new Uri("http://a.vimeocdn.com/p/flash/moogaloop/5.2.25/moogaloop.swf?v=1.0.0");
-					var response = await client.GetAsync(videoUrl);
-					return new List<Tuple<string, string>> { Tuple.Create(response.Headers.Location.ToString(), "H264") };
-				}
+				else
+					return null;
 			}
 		}
+	}
+
+	public class Mobile
+	{
+		public int profile { get; set; }
+		public string origin { get; set; }
+		public string url { get; set; }
+		public int height { get; set; }
+		public int width { get; set; }
+		public int id { get; set; }
+		public int bitrate { get; set; }
+		public int availability { get; set; }
+	}
+
+	public class Hd
+	{
+		public int profile { get; set; }
+		public string origin { get; set; }
+		public string url { get; set; }
+		public int height { get; set; }
+		public int width { get; set; }
+		public int id { get; set; }
+		public int bitrate { get; set; }
+		public int availability { get; set; }
+	}
+
+	public class Sd
+	{
+		public int profile { get; set; }
+		public string origin { get; set; }
+		public string url { get; set; }
+		public int height { get; set; }
+		public int width { get; set; }
+		public int id { get; set; }
+		public int bitrate { get; set; }
+		public int availability { get; set; }
+	}
+
+	public class H264
+	{
+		public Mobile mobile { get; set; }
+		public Hd hd { get; set; }
+		public Sd sd { get; set; }
+	}
+
+	public class Hls
+	{
+		public string origin { get; set; }
+		public string cdn { get; set; }
+		public string all { get; set; }
+		public string hd { get; set; }
+	}
+
+	public class Files
+	{
+		public H264 h264 { get; set; }
+		public Hls hls { get; set; }
+		public List<string> codecs { get; set; }
+	}
+
+	public class Cookie
+	{
+		public int scaling { get; set; }
+		public double volume { get; set; }
+		public object hd { get; set; }
+		public string captions { get; set; }
+	}
+
+	public class Flags
+	{
+		public int preload_video { get; set; }
+		public int plays { get; set; }
+		public int webp { get; set; }
+		public int partials { get; set; }
+		public int conviva { get; set; }
+		public int login { get; set; }
+	}
+
+	public class Build
+	{
+		public string player { get; set; }
+		public string js { get; set; }
+	}
+
+	public class Urls
+	{
+		public string zeroclip_swf { get; set; }
+		public string js { get; set; }
+		public string proxy { get; set; }
+		public string conviva { get; set; }
+		public string flideo { get; set; }
+		public string canvas_js { get; set; }
+		public string moog { get; set; }
+		public string conviva_service { get; set; }
+		public string moog_js { get; set; }
+		public string zeroclip_js { get; set; }
+		public string css { get; set; }
+	}
+
+	public class Request
+	{
+		public Files files { get; set; }
+		public string ga_account { get; set; }
+		public int timestamp { get; set; }
+		public int expires { get; set; }
+		public string session { get; set; }
+		public Cookie cookie { get; set; }
+		public string cookie_domain { get; set; }
+		public object referrer { get; set; }
+		public string conviva_account { get; set; }
+		public Flags flags { get; set; }
+		public Build build { get; set; }
+		public Urls urls { get; set; }
+		public string signature { get; set; }
+	}
+
+	public class Rating
+	{
+		public int id { get; set; }
+	}
+
+	public class Owner
+	{
+		public string account_type { get; set; }
+		public string name { get; set; }
+		public string img { get; set; }
+		public string url { get; set; }
+		public string img_2x { get; set; }
+		public int id { get; set; }
+	} 
+
+	public class Thumbs
+	{
+		[JsonProperty("1280")]
+		public string large { get; set; }
+		[JsonProperty("960")]
+		public string medium { get; set; }
+		[JsonProperty("640")]
+		public string small { get; set; }
+		[JsonProperty("base")]
+		public string plain { get; set; }
+	}
+
+	public class Video
+	{
+		public Rating rating { get; set; }
+		public int allow_hd { get; set; }
+		public int height { get; set; }
+		public Owner owner { get; set; }
+		public Thumbs thumbs { get; set; }
+		public int duration { get; set; }
+		public int id { get; set; }
+		public int hd { get; set; }
+		public string embed_code { get; set; }
+		public int default_to_hd { get; set; }
+		public string title { get; set; }
+		public string url { get; set; }
+		public string privacy { get; set; }
+		public string share_url { get; set; }
+		public int width { get; set; }
+		public string embed_permission { get; set; }
+		public double fps { get; set; }
+	}
+
+	public class Build2
+	{
+		public string player { get; set; }
+		public string rpc { get; set; }
+	}
+
+	public class Badge
+	{
+		public string name { get; set; }
+		public string img { get; set; }
+		public string svg { get; set; }
+		public int height { get; set; }
+		public int width { get; set; }
+		public string link { get; set; }
+		public string img_2x { get; set; }
+	}
+
+	public class Settings
+	{
+		public int fullscreen { get; set; }
+		public int byline { get; set; }
+		public int like { get; set; }
+		public int playbar { get; set; }
+		public int title { get; set; }
+		public int color { get; set; }
+		public int branding { get; set; }
+		public int share { get; set; }
+		public int scaling { get; set; }
+		public int logo { get; set; }
+		public int info_on_pause { get; set; }
+		public int watch_later { get; set; }
+		public int portrait { get; set; }
+		public int embed { get; set; }
+		public Badge badge { get; set; }
+		public int volume { get; set; }
+	}
+
+	public class Embed
+	{
+		public object player_id { get; set; }
+		public string outro { get; set; }
+		public int api { get; set; }
+		public string context { get; set; }
+		public int time { get; set; }
+		public string color { get; set; }
+		public Settings settings { get; set; }
+		public int on_site { get; set; }
+		public int loop { get; set; }
+		public int autoplay { get; set; }
+	}
+
+	public class User
+	{
+		public int liked { get; set; }
+		public string account_type { get; set; }
+		public int logged_in { get; set; }
+		public int owner { get; set; }
+		public int watch_later { get; set; }
+		public int id { get; set; }
+		public int mod { get; set; }
+	}
+
+	public class RootVimeo
+	{
+		public string cdn_url { get; set; }
+		public int view { get; set; }
+		public Request request { get; set; }
+		public string player_url { get; set; }
+		public Video video { get; set; }
+		public Build2 build { get; set; }
+		public Embed embed { get; set; }
+		public string vimeo_url { get; set; }
+		public User user { get; set; }
 	}
 }
