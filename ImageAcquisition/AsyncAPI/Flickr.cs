@@ -13,7 +13,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
     class Flickr : IAsyncAcquisitionAPI
     {
         //Transliterated from Reddit Enhancement Suite https://github.com/honestbleeps/Reddit-Enhancement-Suite/blob/master/lib/reddit_enhancement_suite.user.js
-        private Regex hashRe = new Regex(@"^http:\/\/(?:\w+)\.?flickr\.com\/(?:.*)\/([\d]{10})\/?(?:.*)?$");
+        private Regex hashRe = new Regex(@"^https?:\/\/(?:\w+)\.?flickr\.com\/(?:.*)\/([\d]{10})\/?(?:.*)?$");
 
 		public bool IsMatch(Uri uri)
         {

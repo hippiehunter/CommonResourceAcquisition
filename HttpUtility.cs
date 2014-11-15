@@ -50,7 +50,11 @@ namespace CommonResourceAcquisition.ImageAcquisition
 			{
 				if (Url.Host.EndsWith(tld, StringComparison.CurrentCultureIgnoreCase))
 				{
-					if (tld.Length > bestMatch.Length) bestMatch = tld;
+					if (tld.Length > bestMatch.Length)
+					{
+						if (Url.Host.EndsWith("." + tld, StringComparison.CurrentCultureIgnoreCase))
+							bestMatch = tld;
+					}
 				}
 			}
 			if (string.IsNullOrEmpty(bestMatch))

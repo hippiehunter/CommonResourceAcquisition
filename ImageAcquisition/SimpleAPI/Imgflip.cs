@@ -9,7 +9,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.SimpleAPI
 {
 	class Imgflip : IAcquisitionAPI
 	{
-		private static Regex hashRe = new Regex(@"^https?:\/\/imgflip\.com\/(i|gif)\/[a-z0-9]+");
+		private static Regex hashRe = new Regex(@"^https?:\/\/imgflip\.com\/(i|gif)\/([a-z0-9]+)");
 
 		public string GetImageFromUri(Uri uri)
 		{
