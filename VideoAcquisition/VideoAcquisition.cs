@@ -31,6 +31,18 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				return true;
         }
 
+        public static bool IsGifType(string originalUrl)
+        {
+            string fileName = "";
+
+            if (Uri.IsWellFormedUriString(originalUrl, UriKind.Absolute))
+            {
+                var uri = new Uri(originalUrl);
+                fileName = uri.AbsolutePath;
+            }
+            return fileName.EndsWith(".gifv") || HttpClientUtility.GetDomainFromUrl(originalUrl).ToLower() == "gfycat.com";
+        }
+
         public static IVideoResult GetVideo(string originalUrl)
         {
 			string targetHost = null;
