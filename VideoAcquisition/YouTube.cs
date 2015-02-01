@@ -299,9 +299,9 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			string javaScriptCode = null;
 
 			var response = await HttpGet("https://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1");
-			var match = Regex.Match(response, "url_encoded_fmt_stream_map\": \"(.*?)\"");
+			var match = Regex.Match(response, "url_encoded_fmt_stream_map\": ?\"(.*?)\"");
 			var data = Uri.UnescapeDataString(match.Groups[1].Value);
-			match = Regex.Match(response, "adaptive_fmts\": \"(.*?)\"");
+			match = Regex.Match(response, "adaptive_fmts\": ?\"(.*?)\"");
 			var data2 = Uri.UnescapeDataString(match.Groups[1].Value);
 
 			var arr = Regex.Split(data + "," + data2, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"); // split by comma but outside quotes
