@@ -1,9 +1,8 @@
-﻿using System;
+﻿using CommonResourceAcquisition.ImageAcquisition;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -174,45 +173,28 @@ namespace CommonResourceAcquisition.VideoAcquisition
 
 		private const string BotUserAgent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
-		/// <summary>
-        /// Returns the title of the YouTube video. 
-        /// </summary>
-        public static Task<string> GetVideoTitleAsync(string youTubeId)
-        {
-            return GetVideoTitleAsync(youTubeId, CancellationToken.None);
-        }
-
         /// <summary>
         /// Returns the title of the YouTube video. 
         /// </summary>
-        public static async Task<string> GetVideoTitleAsync(string youTubeId, CancellationToken token)
+        public static async Task<string> GetVideoTitleAsync(string youTubeId, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
-			using (var handler = new HttpClientHandler { })
+			using (var client = networkLayer.Clone())
 			{
-				if (handler.SupportsAutomaticDecompression)
+				client.AddHeaders("User-Agent", BotUserAgent);
+				var html = await client.Get("http://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1", token, progress, null, true);
+				var startIndex = html.IndexOf(" title=\"");
+				if (startIndex != -1)
 				{
-					handler.AutomaticDecompression = DecompressionMethods.GZip |
-													 DecompressionMethods.Deflate;
-				}
-				using (var client = new HttpClient(handler))
-				{
-					client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
-					var response = await client.GetAsync("http://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1", token);
-					var html = await response.Content.ReadAsStringAsync();
-					var startIndex = html.IndexOf(" title=\"");
+					startIndex = html.IndexOf(" title=\"", startIndex + 1);
 					if (startIndex != -1)
 					{
-						startIndex = html.IndexOf(" title=\"", startIndex + 1);
-						if (startIndex != -1)
-						{
-							startIndex += 8;
-							var endIndex = html.IndexOf("\">", startIndex);
-							if (endIndex != -1)
-								return html.Substring(startIndex, endIndex - startIndex);
-						}
+						startIndex += 8;
+						var endIndex = html.IndexOf("\">", startIndex);
+						if (endIndex != -1)
+							return html.Substring(startIndex, endIndex - startIndex);
 					}
-					return null;
 				}
+				return null;
 			}
         }
 
@@ -249,56 +231,31 @@ namespace CommonResourceAcquisition.VideoAcquisition
 		/// Returns the best matching YouTube stream URI which has an audio and video channel and is not 3D. 
 		/// </summary>
 		/// <returns>Returns null when no appropriate URI has been found. </returns>
-		public static Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality maxQuality)
+		public static Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality maxQuality, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
 		{
-			return GetVideoUriAsync(youTubeId, DefaultMinQuality, maxQuality, CancellationToken.None);
+			return GetVideoUriAsync(youTubeId, DefaultMinQuality, maxQuality, networkLayer, progress, token);
 		}
+
 
 		/// <summary>
 		/// Returns the best matching YouTube stream URI which has an audio and video channel and is not 3D. 
 		/// </summary>
 		/// <returns>Returns null when no appropriate URI has been found. </returns>
-		public static Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality maxQuality, CancellationToken token)
+		public static async Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality minQuality, YouTubeQuality maxQuality, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
 		{
-			return GetVideoUriAsync(youTubeId, DefaultMinQuality, maxQuality, token);
-		}
-
-		/// <summary>
-		/// Returns the best matching YouTube stream URI which has an audio and video channel and is not 3D. 
-		/// </summary>
-		/// <returns>Returns null when no appropriate URI has been found. </returns>
-		public static Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality minQuality, YouTubeQuality maxQuality)
-		{
-			return GetVideoUriAsync(youTubeId, minQuality, maxQuality, CancellationToken.None);
-		}
-
-		/// <summary>
-		/// Returns the best matching YouTube stream URI which has an audio and video channel and is not 3D. 
-		/// </summary>
-		/// <returns>Returns null when no appropriate URI has been found. </returns>
-		public static async Task<YouTubeUri> GetVideoUriAsync(string youTubeId, YouTubeQuality minQuality, YouTubeQuality maxQuality, CancellationToken token)
-		{
-			var uris = await GetUrisAsync(youTubeId, token);
+			var uris = await GetUrisAsync(youTubeId, networkLayer, progress, token);
 			return GetBestVideoUri(uris, minQuality, maxQuality);
 		}
 
 		/// <summary>
 		/// Returns all available URIs (audio-only and video) for the given YouTube ID. 
 		/// </summary>
-		public static Task<YouTubeUri[]> GetUrisAsync(string youTubeId)
-		{
-			return GetUrisAsync(youTubeId, CancellationToken.None);
-		}
-
-		/// <summary>
-		/// Returns all available URIs (audio-only and video) for the given YouTube ID. 
-		/// </summary>
-		public static async Task<YouTubeUri[]> GetUrisAsync(string youTubeId, CancellationToken token)
+		public static async Task<YouTubeUri[]> GetUrisAsync(string youTubeId, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
 		{
 			var urls = new List<YouTubeUri>();
 			string javaScriptCode = null;
 
-			var response = await HttpGet("https://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1");
+			var response = await HttpGet("https://www.youtube.com/watch?v=" + youTubeId + "&nomobile=1", networkLayer, progress, token);
 			var match = Regex.Match(response, "url_encoded_fmt_stream_map\": ?\"(.*?)\"");
 			var data = Uri.UnescapeDataString(match.Groups[1].Value);
 			match = Regex.Match(response, "adaptive_fmts\": ?\"(.*?)\"");
@@ -341,7 +298,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 														Regex.Match(response,
 															"\"\\\\/\\\\/s.ytimg.com\\\\/yts\\\\/jsbin\\\\/html5player-(.+?)\\.js\"")
 															.Groups[1] + ".js";
-									javaScriptCode = await HttpGet(javaScriptUri);
+									javaScriptCode = await HttpGet(javaScriptUri, networkLayer, progress, token);
 								}
 
 								signature = GenerateSignature(value, javaScriptCode);
@@ -457,22 +414,13 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			return str.ToString();
 		}
 
-		private static async Task<string> HttpGet(string uri)
+		private static async Task<string> HttpGet(string uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
 		{
-			using (var handler = new HttpClientHandler { })
-			{
-				if (handler.SupportsAutomaticDecompression)
-				{
-					handler.AutomaticDecompression = DecompressionMethods.GZip |
-													 DecompressionMethods.Deflate;
-				}
-				using (var client = new HttpClient(handler))
-				{
-					client.DefaultRequestHeaders.Add("User-Agent", BotUserAgent);
-					var response = await client.GetAsync(uri);
-					return await response.Content.ReadAsStringAsync();
-				}
-			}
+            using (var headeredNetworkLayer = networkLayer.Clone())
+            {
+                networkLayer.AddHeaders("User-Agent", BotUserAgent);
+                return await networkLayer.Get(uri, token, progress, null, true);
+            }
 		}
 
 		internal static string GetYouTubeId(string originalUrl)
@@ -492,7 +440,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			return youtubeRegex.IsMatch(originalUrl);
 		}
 
-		internal static IVideoResult GetVideoResult(string originalUrl)
+		internal static IVideoResult GetVideoResult(string originalUrl, IResourceNetworkLayer networkLayer)
 		{
 			return new VideoResult(originalUrl);
 		}
@@ -506,14 +454,14 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				_originalUrl = originalUrl;
 			}
 
-			public Task<string> PreviewUrl(CancellationToken cancelToken)
+			public Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken cancelToken)
 			{
 				return Task.FromResult(YouTube.GetThumbnailUri(YouTube.GetYouTubeId(_originalUrl)).ToString());
 			}
 
-			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(CancellationToken cancelToken)
+			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken cancelToken)
 			{
-				var uris = await YouTube.GetUrisAsync(YouTube.GetYouTubeId(_originalUrl));
+				var uris = await YouTube.GetUrisAsync(YouTube.GetYouTubeId(_originalUrl), networkLayer, progress, cancelToken);
 				return uris.Select(uri => Tuple.Create(uri.Uri.ToString(), uri.Type)).ToList();
 			}
 		}

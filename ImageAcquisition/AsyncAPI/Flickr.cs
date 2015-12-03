@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
@@ -34,7 +35,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
             public string provider_url;
         }
 
-		public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri)
+		public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
             try
             {
@@ -52,7 +53,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
                     href += "/sizes/c" + inFragment;
                 }
                 href = href.Replace("/lightbox", "");
-                var jsonResult = await HttpClientUtility.Get("http://www.flickr.com/services/oembed/?format=json&url=" + Uri.EscapeUriString(href));
+                var jsonResult = await networkLayer.Get("http://www.flickr.com/services/oembed/?format=json&url=" + Uri.EscapeUriString(href), token, progress, null, false);
                 var resultObject = JsonConvert.DeserializeObject<OEmbedResult>(jsonResult);
                 return new Tuple<string, string>[] { Tuple.Create(resultObject.author_name + " via " + resultObject.provider_name + " : " + resultObject.title, resultObject.url) };
             }

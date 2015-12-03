@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
@@ -31,7 +32,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
                 return false;
         }
 
-        public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri)
+        public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
             var href = uri.OriginalString.Split('?')[0];
             var groups = hashRe.Match(href).Groups;
@@ -42,7 +43,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
                 if (hash.StartsWith("m"))
                 {
                     var apiURL = "http://min.us/api/GetItems/" + hash;
-                    var jsonResult = await HttpClientUtility.Get(apiURL);
+                    var jsonResult = await networkLayer.Get(apiURL, token, progress, null, false);
                     dynamic result = JsonConvert.DeserializeObject(jsonResult);
                     return new Tuple<string, string>[] { Tuple.Create(title, (string)result.src) };
                 }

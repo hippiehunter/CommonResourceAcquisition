@@ -3,24 +3,134 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.ImageAcquisition
 {
-	public class HttpClientUtility
-	{
-		private static HttpClient _httpClient = new HttpClient(new HttpClientHandler());
-		public static async Task<string> Get(string uri, bool ignoreErrors = false)
-		{
-			if (ignoreErrors)
-			{
-				var httpRequest = await _httpClient.GetAsync(uri);
-				return await httpRequest.Content.ReadAsStringAsync();
-			}
-			else
-				return await _httpClient.GetStringAsync(uri);
-		}
+    public interface IResourceNetworkLayer : IDisposable
+    {
+        void JoinProgress(IProgress<float> progress1, IProgress<float> progress2);
+        Task<string> Get(string url, CancellationToken token, IProgress<float> progress, Dictionary<string, string> body, bool ignoreErrors);
+        void AddHeaders(string name, string value);
+        void SetReferer(string referrer);
+        IResourceNetworkLayer Clone();
+    }
 
+    public class ResourceNetworkLayer : IResourceNetworkLayer
+    {
+        HttpClient _httpClient = new HttpClient();
+
+        public void AddHeaders(string name, string value)
+        {
+            _httpClient.DefaultRequestHeaders.Add(name, value);
+        }
+
+        public void AddHeaders(string name, IEnumerable<string> values)
+        {
+            _httpClient.DefaultRequestHeaders.Add(name, values);
+        }
+
+        public IResourceNetworkLayer Clone()
+        {
+            var result = new ResourceNetworkLayer();
+            foreach (var header in _httpClient.DefaultRequestHeaders)
+                result.AddHeaders(header.Key, header.Value);
+
+            result.SetReferer(_httpClient.DefaultRequestHeaders.Referrer.ToString());
+            return result;
+        }
+
+        public void Dispose()
+        {
+            if(_httpClient != null)
+                _httpClient.Dispose();
+
+            _httpClient = null;
+        }
+
+        public async Task<string> Get(string url, CancellationToken token, IProgress<float> progress, Dictionary<string, string> body, bool ignoreErrors)
+        {
+            //progress/cancel is not implemented using System.Net.Http
+            if (ignoreErrors)
+            {
+                var httpRequest = await _httpClient.GetAsync(url);
+                return await httpRequest.Content.ReadAsStringAsync();
+            }
+            else
+                return await _httpClient.GetStringAsync(url);
+        }
+
+        public void JoinProgress(IProgress<float> progress1, IProgress<float> progress2)
+        {
+            if (progress1 is Progress<float>)
+            {
+                ((Progress<float>)progress1).ProgressChanged += (sender, arg) => progress2.Report(arg);
+            }
+        }
+
+        public void SetReferer(string referrer)
+        {
+            _httpClient.DefaultRequestHeaders.Referrer = new Uri(referrer);
+        }
+    }
+
+    public class JoinableCancellationTokenSource
+    {
+        public CancellationToken Token { get { return _cancelTokenSource.Token; } }
+        CancellationTokenSource _cancelTokenSource = new CancellationTokenSource();
+        List<CancellationTokenRegistration> _cancellationRegistration = new List<CancellationTokenRegistration>();
+        int _cancelationCount = 0;
+
+        public bool IsCancellationRequested { get { return _cancelTokenSource.IsCancellationRequested; } }
+
+        public bool AddToken(CancellationToken token)
+        {
+            bool reset = false;
+            if (_cancelTokenSource.IsCancellationRequested)
+            {
+                lock (this)
+                {
+                    if (_cancelTokenSource.IsCancellationRequested)
+                    {
+                        Clear();
+                        _cancelTokenSource = new CancellationTokenSource();
+                        reset = true;
+                    }
+                }
+            }
+            _cancellationRegistration.Add(token.Register(Canceled));
+            return reset;
+        }
+
+        private void Canceled()
+        {
+            _cancelationCount++;
+            if (_cancelationCount >= _cancellationRegistration.Count)
+            {
+                Clear();
+            }
+        }
+
+        public void Clear()
+        {
+            lock(this)
+            {
+                if(!_cancelTokenSource.IsCancellationRequested)
+                    _cancelTokenSource.Cancel();
+
+                foreach (var reg in _cancellationRegistration)
+                {
+                    reg.Dispose();
+                }
+                _cancellationRegistration.Clear();
+            }
+        }
+    }
+
+    public class HttpClientUtility
+	{
+        public static IResourceNetworkLayer NetworkLayer { get; set; }
 		//the below comes from servermanfail -> http://stackoverflow.com/questions/2154167/get-just-the-domain-name-from-a-url
 
 		static public string GetDomainFromUrl(string Url)

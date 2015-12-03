@@ -43,7 +43,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
             return fileName.EndsWith(".gifv") || HttpClientUtility.GetDomainFromUrl(originalUrl).ToLower() == "gfycat.com";
         }
 
-        public static IVideoResult GetVideo(string originalUrl)
+        public static IVideoResult GetVideo(string originalUrl, IResourceNetworkLayer networkLayer)
         {
 			string targetHost = null;
 			string fileName = null;
@@ -60,7 +60,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			else if (fileName.EndsWith(".mp4") || fileName.EndsWith(".mpg"))
 				return new DummyVideoResult(originalUrl, null);
 			else if (YouTube.IsAPI(originalUrl))
-				return YouTube.GetVideoResult(originalUrl);
+				return YouTube.GetVideoResult(originalUrl, networkLayer);
 			else
 			{
 				switch (HttpClientUtility.GetDomainFromUrl(originalUrl).ToLower())
@@ -85,12 +85,12 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				_videoUrl = videoUrl;
 				_previewUrl = previewUrl;
 			}
-			public Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+			public Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
 				return Task.FromResult(_previewUrl);
 			}
 
-			public Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			public Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
 				return Task.FromResult((IEnumerable<Tuple<string, string>>)new List<Tuple<string, string>> { new Tuple<string, string> ( _videoUrl, "mp4" )});
 			}

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommonResourceAcquisition.ImageAcquisition;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,7 +10,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 {
     public interface IVideoResult
     {
-        Task<string> PreviewUrl(CancellationToken cancelToken);
-		Task<IEnumerable<Tuple<string, string>>> PlayableStreams(CancellationToken cancelToken);
+        Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken cancelToken);
+		Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken cancelToken);
     }
 }

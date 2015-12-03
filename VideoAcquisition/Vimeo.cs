@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using CommonResourceAcquisition.ImageAcquisition;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,33 +7,13 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.VideoAcquisition
 {
 	class Vimeo
 	{
-		private static HttpClient _client;
-		static Vimeo()
-		{
-			var handler = new HttpClientHandler { CookieContainer = new CookieContainer() };
-			if (handler.SupportsAutomaticDecompression)
-			{
-				handler.AutomaticDecompression = DecompressionMethods.GZip |
-												 DecompressionMethods.Deflate;
-			}
-			_client = new HttpClient(handler);
-			_client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0");
-			_client.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-			_client.DefaultRequestHeaders.Add("Accept-Language", "ru,en;q=0.8,en-us;q=0.5,uk;q=0.3");
-			_client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
-		}
-		private static async Task<string> HttpGet(string uri, string referer)
-		{
-			_client.DefaultRequestHeaders.Referrer = new Uri(referer);
-			var response = await _client.GetAsync(uri);
-			return await response.Content.ReadAsStringAsync();
-		}
 		public static IVideoResult GetVideoResult(string originalUrl)
 		{
 			return new VideoResult(originalUrl);
@@ -65,39 +46,79 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				public string embed_privacy { get; set; }
 			}
 
-			private Lazy<Task<RootVimeo>> _configRoot;
-			private Lazy<Task<string>> _initialPageData;
-			public VideoResult(string originalUrl)
-			{
-				_initialPageData = new Lazy<Task<string>>(() =>
-				{
-					return HttpGet(originalUrl, "http://www.google.com");
-				});
-				_configRoot = new Lazy<Task<RootVimeo>>(async () =>
-				{
-					var pageData = await _initialPageData.Value;
-					string clipId = null;
-					if (Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Success)
-					{
-						clipId = Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Groups[1].ToString();
-					}
-					else if (Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Success)
-					{
-						clipId = Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Groups[1].ToString();
-					}
+            private IResourceNetworkLayer _networkLayer = HttpClientUtility.NetworkLayer.Clone();
+            Tuple<Task<RootVimeo>, IProgress<float>> _configRootPack;
+            JoinableCancellationTokenSource _cancelTokenSource = new JoinableCancellationTokenSource();
+            string _originalUrl;
 
-					if (!string.IsNullOrWhiteSpace(clipId))
-					{
-						var configResult = await HttpGet(string.Format("http://player.vimeo.com/video/{0}/config", clipId), string.Format("http://vimeo.com/{0}", clipId));
-						return JsonConvert.DeserializeObject<RootVimeo>(configResult);
-					}
-					else
-						return null;
-				});
-			}
-			public async Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+            async Task<RootVimeo> LoadContentsImpl(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
+            {
+                using (var client = networkLayer.Clone())
+                {
+                    client.AddHeaders("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0");
+                    client.AddHeaders("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                    client.AddHeaders("Accept-Language", "ru,en;q=0.8,en-us;q=0.5,uk;q=0.3");
+                    client.SetReferer("http://www.google.com");
+                    var pageData = await client.Get(_originalUrl, token, progress, null, false);
+                    string clipId = null;
+                    if (Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Success)
+                    {
+                        clipId = Regex.Match(pageData, @"clip_id=(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+                    }
+                    else if (Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Success)
+                    {
+                        clipId = Regex.Match(pageData, @"(\d+)", RegexOptions.Singleline).Groups[1].ToString();
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(clipId))
+                    {
+                        client.SetReferer(string.Format("http://vimeo.com/{0}", clipId));
+                        var configResult = await client.Get(string.Format("http://player.vimeo.com/video/{0}/config", clipId), token, progress, null, false);
+                        return JsonConvert.DeserializeObject<RootVimeo>(configResult);
+                    }
+                    else
+                        return null;
+                }
+            }
+
+            async Task<RootVimeo> LoadContents(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
+            {
+                var reset = _cancelTokenSource.AddToken(token);
+                if (_configRootPack == null || reset)
+                {
+                    lock (this)
+                    {
+                        if (_configRootPack == null || reset)
+                        {
+                            _configRootPack = Tuple.Create(LoadContentsImpl(networkLayer, progress, _cancelTokenSource.Token), progress);
+                        }
+                    }
+
+                }
+
+                if (_configRootPack.Item2 != progress)
+                {
+                    HttpClientUtility.NetworkLayer.JoinProgress(_configRootPack.Item2, progress);
+                }
+
+                try
+                {
+                    return await _configRootPack.Item1;
+                }
+                finally
+                {
+                    _cancelTokenSource.Clear();
+                }
+            }
+
+            public VideoResult(string originalUrl)
 			{
-				var config = await _configRoot.Value;
+                _originalUrl = originalUrl;
+			}
+
+			public async Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
+			{
+				var config = await LoadContents(networkLayer, progress, cancelToken);
 				if (config != null)
 				{
 					return config.video.thumbs.medium;
@@ -106,9 +127,9 @@ namespace CommonResourceAcquisition.VideoAcquisition
 					return null;
 			}
 
-			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
-				var config = await _configRoot.Value;
+				var config = await LoadContents(networkLayer, progress, cancelToken);
 				if (config != null)
 				{
 					var result = new List<Tuple<string, string>>();

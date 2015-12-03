@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.VideoAcquisition
@@ -16,21 +17,49 @@ namespace CommonResourceAcquisition.VideoAcquisition
 
 		internal class VideoResult : IVideoResult
 		{
-			Lazy<Task<string>> _pageContents;
+            Tuple<Task<string>, IProgress<float>> _pageContentLoadPack;
+            JoinableCancellationTokenSource _cancelTokenSource = new JoinableCancellationTokenSource();
+            string _originalUrl;
+            async Task<string> LoadContents(IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
+            {
+                var reset = _cancelTokenSource.AddToken(token);
+                if (_pageContentLoadPack == null || reset)
+                {
+                    lock(this)
+                    {
+                        if (_pageContentLoadPack == null || reset)
+                        {
+                            if (_originalUrl.Contains("&ajax=1"))
+                                _pageContentLoadPack = Tuple.Create(networkLayer.Get(_originalUrl, _cancelTokenSource.Token, progress, null, false), progress);
+                            else
+                                _pageContentLoadPack = Tuple.Create(networkLayer.Get(_originalUrl + "&ajax=1", token, progress, null, false), progress);
+                        }
+                    }
+                    
+                }
+
+                if (_pageContentLoadPack.Item2 != progress)
+                {
+                    HttpClientUtility.NetworkLayer.JoinProgress(_pageContentLoadPack.Item2, progress);
+                }
+
+                try
+                {
+                    return await _pageContentLoadPack.Item1;
+                }
+                finally
+                {
+                    _cancelTokenSource.Clear();
+                }
+            }
+
 			public VideoResult(string originalUrl)
 			{
-				_pageContents = new Lazy<Task<string>>(() =>
-				{
-					if (originalUrl.Contains("&ajax=1"))
-						return HttpClientUtility.Get(originalUrl);
-					else
-						return HttpClientUtility.Get(originalUrl + "&ajax=1");
-				});
+                _originalUrl = originalUrl;
 			}
-			public async Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+			public async Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
-				
-				var pageContents = await _pageContents.Value;
+                var pageContents = await LoadContents(networkLayer, progress, cancelToken);
 				if (pageContents != null)
 				{
 					var targetString = "image: \"http://edge.liveleak.com";
@@ -49,10 +78,10 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				return null;
 			}
 
-			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
-				var pageContents = await _pageContents.Value;
-				if (pageContents != null)
+				var pageContents = await LoadContents(networkLayer, progress, cancelToken);
+                if (pageContents != null)
 				{
 					var targetString = "file: \"http://edge.liveleak.com";
 					var targetStringStart = pageContents.IndexOf(targetString);

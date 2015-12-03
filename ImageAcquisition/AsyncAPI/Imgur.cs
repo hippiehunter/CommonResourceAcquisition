@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
@@ -37,7 +38,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
             
         }
 
-		public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri)
+		public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
             var href = uri.OriginalString;
             var groups = hashRe.Match(href).Groups;
@@ -60,7 +61,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
                 {
                     if (uri.AbsolutePath.ToLower().StartsWith("/gallery"))
                     {
-                        return await GetImagesFromUri(title, new Uri("http://imgur.com/a/" + groups[1].Value));
+                        return await GetImagesFromUri(title, new Uri("http://imgur.com/a/" + groups[1].Value), networkLayer, progress, token);
                     }
                     else
                     {
@@ -72,7 +73,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
             else if (albumGroups.Count > 2 && string.IsNullOrWhiteSpace(albumGroups[2].Value))
             {
                 var apiURL = string.Format("{0}album/{1}.json", apiPrefix, albumGroups[1].Value);
-                var jsonResult = await HttpClientUtility.Get(apiURL, true);
+                var jsonResult = await networkLayer.Get(apiURL, token, progress, null, true);
                 if(string.IsNullOrWhiteSpace(jsonResult))
                     return Enumerable.Empty<Tuple<string, string>>();
 

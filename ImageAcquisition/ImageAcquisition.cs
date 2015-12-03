@@ -6,10 +6,18 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CommonResourceAcquisition.ImageAcquisition
 {
+    public enum ImageAPIType
+    {
+        None,
+        Simple,
+        Async
+    }
+
     public class ImageAcquisition
     {
 		private static Dictionary<string, IAcquisitionAPI> _simpleAPIs = new Dictionary<string,IAcquisitionAPI>();
@@ -63,7 +71,35 @@ namespace CommonResourceAcquisition.ImageAcquisition
 			_asyncAPIs.Add("min.us", minus);
 		}
 
-        public static async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUrl(string title, string url)
+        public static string GetSimpleImageFromUrl(string url)
+        {
+            try
+            {
+                var uri = new Uri(url);
+
+                string filename = Path.GetFileName(uri.LocalPath);
+
+                if (filename.EndsWith(".jpg") || filename.EndsWith(".png") || filename.EndsWith(".jpeg") || filename.EndsWith(".gif"))
+                    return url;
+                else
+                {
+                    var domain = HttpClientUtility.GetDomainFromUrl(url).ToLower();
+                    IAcquisitionAPI simpleApi = null;
+                    if (_simpleAPIs.TryGetValue(domain, out simpleApi))
+                    {
+                        return simpleApi.GetImageFromUri(uri);
+                    }
+                    else
+                        return string.Empty;
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        public static async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUrl(string title, string url, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
             try
             {
@@ -84,7 +120,7 @@ namespace CommonResourceAcquisition.ImageAcquisition
 					}
 					else if (_asyncAPIs.TryGetValue(domain, out asyncApi))
 					{
-						return await asyncApi.GetImagesFromUri(title, uri);
+						return await asyncApi.GetImagesFromUri(title, uri, networkLayer, progress, token);
 					}
 					else
 						return Enumerable.Empty<Tuple<string, string>>();
@@ -114,7 +150,7 @@ namespace CommonResourceAcquisition.ImageAcquisition
             return false;
         }
 
-        public static bool IsImageAPI(string url)
+        public static ImageAPIType ImageAPIType(string url)
         {
             try
             {
@@ -123,7 +159,7 @@ namespace CommonResourceAcquisition.ImageAcquisition
                 string filename = Path.GetFileName(uri.LocalPath);
 
                 if (filename.EndsWith(".jpg") || url.EndsWith(".png") || url.EndsWith(".jpeg") || filename.EndsWith(".gif"))
-                    return false;
+                    return CommonResourceAcquisition.ImageAcquisition.ImageAPIType.Simple;
                 else
                 {
 					var domain = HttpClientUtility.GetDomainFromUrl(url).ToLower();
@@ -131,14 +167,14 @@ namespace CommonResourceAcquisition.ImageAcquisition
 					IAcquisitionAPI simpleApi = null;
 					if (_simpleAPIs.TryGetValue(domain, out simpleApi))
 					{
-						return true;
+						return CommonResourceAcquisition.ImageAcquisition.ImageAPIType.Simple;
 					}
 					else if (_asyncAPIs.TryGetValue(domain, out asyncApi))
 					{
-						return asyncApi.IsMatch(uri);
+						return asyncApi.IsMatch(uri) ? CommonResourceAcquisition.ImageAcquisition.ImageAPIType.Async : CommonResourceAcquisition.ImageAcquisition.ImageAPIType.None;
 					}
 					else
-						return false;
+						return CommonResourceAcquisition.ImageAcquisition.ImageAPIType.None;
                 }
 
             }
@@ -146,7 +182,7 @@ namespace CommonResourceAcquisition.ImageAcquisition
             {
                 //ignore failure here, we're going to return false anyway
             }
-            return false;
+            return CommonResourceAcquisition.ImageAcquisition.ImageAPIType.None;
         }
     }
 }

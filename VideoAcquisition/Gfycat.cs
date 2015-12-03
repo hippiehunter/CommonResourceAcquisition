@@ -68,17 +68,17 @@ namespace CommonResourceAcquisition.VideoAcquisition
 				_originalUrl = originalUrl;
 			}
 
-			public Task<string> PreviewUrl(System.Threading.CancellationToken cancelToken)
+			public Task<string> PreviewUrl(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
 				string gfyName = GetGfyName(_originalUrl);
 				var thumbUrl = string.Format("http://thumbs.gfycat.com/{0}-poster.jpg", gfyName);
 				return Task.FromResult(thumbUrl);
 			}
 
-			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(System.Threading.CancellationToken cancelToken)
+			public async Task<IEnumerable<Tuple<string, string>>> PlayableStreams(IResourceNetworkLayer networkLayer, IProgress<float> progress, System.Threading.CancellationToken cancelToken)
 			{
 				string gfyName = GetGfyName(_originalUrl);
-				var jsonResult = await HttpClientUtility.Get("http://gfycat.com/cajax/get/" + gfyName);
+				var jsonResult = await networkLayer.Get("http://gfycat.com/cajax/get/" + gfyName, cancelToken, progress, null, false);
 				var gfyResult = JsonConvert.DeserializeObject<GfyResult>(jsonResult);
 				return new List<Tuple<string, string>> { Tuple.Create(gfyResult.gfyItem.mp4Url, "MP4") };
 			}
