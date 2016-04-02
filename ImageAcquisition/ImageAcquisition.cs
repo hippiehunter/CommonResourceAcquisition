@@ -23,6 +23,13 @@ namespace CommonResourceAcquisition.ImageAcquisition
 		private static Dictionary<string, IAcquisitionAPI> _simpleAPIs = new Dictionary<string,IAcquisitionAPI>();
 		private static Dictionary<string, IAsyncAcquisitionAPI> _asyncAPIs = new Dictionary<string,IAsyncAcquisitionAPI>();
 
+        public static string ImgurAPIKey
+        {
+            set
+            {
+                Imgur._apiKey = value;
+            }
+        }
 
 		static ImageAcquisition()
 		{
