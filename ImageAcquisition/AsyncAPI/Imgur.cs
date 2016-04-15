@@ -137,9 +137,9 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
             };
         }
 
-		public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
+        public async Task<IEnumerable<Tuple<string, string>>> GetImagesFromUri(string title, Uri uri, IResourceNetworkLayer networkLayer, IProgress<float> progress, CancellationToken token)
         {
-            
+
             var href = uri.OriginalString.Split('?')[0];
             string hash = "";
             var gallaryMatch = galleryHashRe.Match(href);
@@ -177,9 +177,13 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
             }
 
 
-            if (info != null && info.success == true)
+            if (info != null && info.success == true && info.data.images != null)
             {
                 return info.data.images.Select(image => Tuple.Create(image.title ?? title, image.link));
+            }
+            else if (info?.data?.link != null)
+            {
+                return new Tuple<string, string>[] { Tuple.Create(info.data.title as string ?? title, info.data.link) };
             }
             else if (info.success)
             {
