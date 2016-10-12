@@ -179,7 +179,7 @@ namespace CommonResourceAcquisition.ImageAcquisition.AsyncAPI
 
             if (info != null && info.success == true && info.data.images != null)
             {
-                return info.data.images.Select(image => Tuple.Create(image.title ?? title, image.link));
+                return info.data.images.Select(image => Tuple.Create(image.title ?? title, string.IsNullOrWhiteSpace(image.gifv) ? image.link : image.gifv));
             }
             else if (info?.data?.link != null)
             {

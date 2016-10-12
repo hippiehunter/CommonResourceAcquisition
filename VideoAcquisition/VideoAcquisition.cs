@@ -56,7 +56,7 @@ namespace CommonResourceAcquisition.VideoAcquisition
 			}
 
 			if (fileName.EndsWith(".gifv"))
-				return new DummyVideoResult(originalUrl.Replace(".gifv", ".mp4"), originalUrl.Replace(".gifv", "l.jpg"));
+				return new DummyVideoResult(originalUrl, originalUrl.Replace(".gifv", "l.jpg"));
 			else if (fileName.EndsWith(".mp4") || fileName.EndsWith(".mpg"))
 				return new DummyVideoResult(originalUrl, null);
 			else if (YouTube.IsAPI(originalUrl))
