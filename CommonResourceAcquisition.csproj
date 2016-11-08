@@ -69,6 +69,7 @@
     <Compile Include="ImageAcquisition\SimpleAPI\Memefive.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Memegen.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Picsarus.cs" />
+    <Compile Include="ImageAcquisition\SimpleAPI\RedditUploads.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Picshd.cs" />
     <Compile Include="ImageAcquisition\SimpleAPI\Quickmeme.cs" />

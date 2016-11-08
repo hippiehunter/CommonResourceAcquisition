@@ -45,6 +45,7 @@ namespace CommonResourceAcquisition.ImageAcquisition
 			var imgflip = new Imgflip();
 			var crtlv = new Ctrlv();
 			var picshd = new Picshd();
+            var redditUploads = new RedditUploads();
 
 			_simpleAPIs.Add("qkme.me", quickmeme);
 			_simpleAPIs.Add("quickmeme.com", quickmeme);
@@ -57,7 +58,9 @@ namespace CommonResourceAcquisition.ImageAcquisition
 			_simpleAPIs.Add("makeameme.org", makeameme);
 			_simpleAPIs.Add("imgflip.com", imgflip);
 			_simpleAPIs.Add("ctrlv.in", crtlv);
-			_simpleAPIs.Add("picshd.com", picshd);
+            _simpleAPIs.Add("i.reddituploads.com", redditUploads);
+            _simpleAPIs.Add("reddituploads.com", redditUploads);
+            _simpleAPIs.Add("picshd.com", picshd);
 
 			_simpleAPIs.Add("memegen.com", memegen);
 			_simpleAPIs.Add("memegen.de", memegen);
